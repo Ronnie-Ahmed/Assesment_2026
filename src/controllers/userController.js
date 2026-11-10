@@ -2,6 +2,9 @@ import User from '../models/User.js';
 import { hashPassword } from '../utils/password.js';
 import { publicUser } from '../utils/serializers.js';
 import { parsePagination, buildPage } from '../utils/pagination.js';
+import Note from '../models/Note.js';
+import Post from '../models/Post.js';
+
 
 function handleError(err, res) {
   if (err.code === 11000) return res.status(409).json({ message: 'email already registered' });
@@ -98,6 +101,9 @@ export async function deleteUser(req, res) {
     }
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) return res.status(404).json({ message: 'user not found' });
+    await Note.deleteMany({ owner: user._id });
+    await Post.deleteMany({ author: user._id }); // served by the {author, _id} index
+    res.status(204).send();
     res.status(204).send();
   } catch (err) {
     handleError(err, res);
