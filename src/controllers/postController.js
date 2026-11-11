@@ -30,6 +30,7 @@ export async function listPosts(req, res) {
     const docs = await Post.find(parsed.filter)
       .sort({ _id: -1 })
       .limit(parsed.limit + 1)
+      .populate('author', 'name')
       .lean();
 
     const page = buildPage(docs, parsed.limit);
@@ -41,7 +42,7 @@ export async function listPosts(req, res) {
 
 export async function getPost(req, res) {
   try {
-    const post = await Post.findById(req.params.id).lean();
+    const post = await Post.findById(req.params.id).populate('author', 'name').lean();
     if (!post) return res.status(404).json({ message: 'post not found' });
     res.json({ post: publicPost(post) });
   } catch (err) {

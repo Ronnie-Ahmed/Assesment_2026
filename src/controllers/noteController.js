@@ -8,14 +8,15 @@ function handleError(err, res) {
   return res.status(500).json({ message: 'server error' });
 }
 
-async function listNotes(res, query, extraFilter) {
+async function listNotes(res, query, extraFilter, withOwner = false) {
   const parsed = parsePagination(query);
   if (!parsed) return res.status(400).json({ message: 'invalid cursor' });
 
-  const docs = await Note.find({ ...extraFilter, ...parsed.filter })
+  let q = Note.find({ ...extraFilter, ...parsed.filter })
     .sort({ _id: -1 })
-    .limit(parsed.limit + 1)
-    .lean();
+    .limit(parsed.limit + 1);
+  if (withOwner) q = q.populate('owner', 'name');
+  const docs = await q.lean();
 
   const page = buildPage(docs, parsed.limit);
   res.json({ ...page, data: page.data.map(publicNote) });
@@ -50,7 +51,7 @@ export async function listAllNotes(req, res) {
       }
       extra.owner = req.query.owner;
     }
-    await listNotes(res, req.query, extra);
+   await listNotes(res, req.query, extra, true);
   } catch (err) {
     handleError(err, res);
   }
