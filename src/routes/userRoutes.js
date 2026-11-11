@@ -7,6 +7,7 @@ import {
   getUser,
   updateUser,
   deleteUser,
+  groupByInterests
 } from '../controllers/userController.js';
 
 const router = Router();
@@ -15,6 +16,7 @@ router.use(authenticate, authorize('admin'));
 
 router.post('/', createUser);
 router.get('/', listUsers);
+router.get('/by-interests', groupByInterests);
 router.get('/:id', validateObjectId(), getUser);
 router.patch('/:id', validateObjectId(), updateUser);
 router.delete('/:id', validateObjectId(), deleteUser);

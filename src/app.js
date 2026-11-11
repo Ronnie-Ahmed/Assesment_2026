@@ -1,16 +1,32 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 import express from 'express';
+import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import noteRoutes from './routes/noteRoutes.js';
 import postRoutes from './routes/postRoutes.js';
 
+
 const app = express();
 
 app.use(express.json());
+app.use('/api', async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('DB connection failed:', err.message);
+    res.status(503).json({ message: 'database unavailable' });
+  }
+});
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/posts', postRoutes);
+app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

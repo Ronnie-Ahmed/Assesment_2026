@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Secure Notes</title>
+<style>
+  body { font-family: sans-serif; max-width: 820px; margin: 20px auto; padding: 0 10px; }
+  section { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+  input, textarea, select, button { margin: 2px; }
+  .item { border-bottom: 1px solid #eee; padding: 4px 0; }
+  .err { color: #b00; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<h1>Secure Notes</h1>
+<p id="msg" class="err"></p>
+
+<section id="auth">
+  <h2>Login / Register</h2>
+  <input id="name" placeholder="name (register only)">
+  <input id="email" placeholder="email">
+  <input id="password" type="password" placeholder="password (min 8)">
+  <input id="interests" placeholder="interests, comma separated (register only)">
+  <button id="loginBtn">Login</button>
+  <button id="registerBtn">Register</button>
+</section>
+
+<div id="app" class="hidden">
+  <p>Logged in as <b id="who"></b> <button id="logoutBtn">Logout</button></p>
+
+  <section>
+    <h2>My notes</h2>
+    <input id="noteTitle" placeholder="title">
+    <input id="noteContent" placeholder="content">
+    <button id="addNote">Add note</button>
+    <div id="notes"></div>
+    <button id="notesMore" class="hidden">Load more</button>
+  </section>
+
+  <section>
+    <h2>Posts (public)</h2>
+    <input id="postTitle" placeholder="title">
+    <input id="postContent" placeholder="content">
+    <button id="addPost">Add post</button>
+    <div id="posts"></div>
+    <button id="postsMore" class="hidden">Load more</button>
+    <h3>Posts by user</h3>
+    <input id="postsUserId" placeholder="user id">
+    <button id="postsUserBtn">Show</button>
+    <div id="userPosts"></div>
+    <button id="userPostsMore" class="hidden">Load more</button>
+  </section>
+
+  <div id="admin" class="hidden">
+    <section>
+      <h2>Admin: users</h2>
+      <input id="uName" placeholder="name">
+      <input id="uEmail" placeholder="email">
+      <input id="uPassword" type="password" placeholder="password">
+      <select id="uRole"><option>user</option><option>admin</option></select>
+      <button id="addUser">Add user</button>
+      <div id="users"></div>
+      <button id="usersMore" class="hidden">Load more</button>
+    </section>
+
+    <section>
+      <h2>Admin: all notes</h2>
+      <div id="allNotes"></div>
+      <button id="allNotesMore" class="hidden">Load more</button>
+    </section>
+
+    <section>
+      <h2>Admin: users grouped by interests</h2>
+      <input id="interestFilter" placeholder="filter by one interest (optional)">
+      <button id="interestBtn">Show</button>
+      <div id="groups"></div>
+      <button id="groupsMore" class="hidden">Load more</button>
+    </section>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let token = localStorage.getItem('token');
+let me = null;
+
+async function api(path, method = 'GET', body) {
+  const res = await fetch('/api' + path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  if (res.status === 401 && token) {
+    token = null;
+    localStorage.removeItem('token');
+  }
+  if (!res.ok) throw new Error((data && data.message) || res.statusText);
+  return data;
+}
+
+async function run(fn) {
+  $('msg').textContent = '';
+  try { await fn(); } catch (e) { $('msg').textContent = e.message; }
+}
+
+function row(parent, text, actions = []) {
+  const div = document.createElement('div');
+  div.className = 'item';
+  const span = document.createElement('span');
+  span.textContent = text;
+  div.append(span);
+  for (const [label, fn] of actions) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.onclick = () => run(fn);
+    div.append(b);
+  }
+  parent.append(div);
+}
+
+// Cursor pagination helper: returns load(reset) and wires up the "Load more" button.
+function pager(box, moreBtn, urlFor, renderItem) {
+  let cursor = null;
+  async function load(reset) {
+    if (reset) { cursor = null; box.replaceChildren(); }
+    const base = urlFor();
+    const q = new URLSearchParams({ limit: 5 });
+    if (cursor) q.set('cursor', cursor);
+    const page = await api(base + (base.includes('?') ? '&' : '?') + q);
+    page.data.forEach((item) => renderItem(box, item));
+    cursor = page.nextCursor;
+    moreBtn.classList.toggle('hidden', !cursor);
+  }
+  moreBtn.onclick = () => run(() => load(false));
+  return load;
+}
+
+// ---- my notes
+const notes = pager($('notes'), $('notesMore'), () => '/notes', (box, n) =>
+  row(box, `${n.title}: ${n.content}`, [
+    ['Edit', async () => {
+      const title = prompt('Title', n.title); if (title === null) return;
+      const content = prompt('Content', n.content); if (content === null) return;
+      await api('/notes/' + n.id, 'PATCH', { title, content });
+      await notes(true);
+    }],
+    ['Delete', async () => { await api('/notes/' + n.id, 'DELETE'); await notes(true); }],
+  ]));
+
+$('addNote').onclick = () => run(async () => {
+  await api('/notes', 'POST', { title: $('noteTitle').value, content: $('noteContent').value });
+  $('noteTitle').value = ''; $('noteContent').value = '';
+  await notes(true);
+});
+
+// ---- posts
+const posts = pager($('posts'), $('postsMore'), () => '/posts', (box, p) =>
+  row(box, `${p.title}: ${p.content} (author id: ${p.author})`));
+
+$('addPost').onclick = () => run(async () => {
+  await api('/posts', 'POST', { title: $('postTitle').value, content: $('postContent').value });
+  $('postTitle').value = ''; $('postContent').value = '';
+  await posts(true);
+});
+
+const userPosts = pager($('userPosts'), $('userPostsMore'),
+  () => '/posts/user/' + encodeURIComponent($('postsUserId').value.trim()),
+  (box, p) => row(box, `${p.title}: ${p.content}`));
+$('postsUserBtn').onclick = () => run(() => userPosts(true));
+
+// ---- admin: users
+const users = pager($('users'), $('usersMore'), () => '/users', (box, u) =>
+  row(box, `${u.name} <${u.email}> [${u.role}] interests: ${u.interests.join(', ')} | id: ${u.id}`, [
+    ['Edit', async () => {
+      const name = prompt('Name', u.name); if (name === null) return;
+      const role = prompt('Role (user/admin)', u.role); if (role === null) return;
+      await api('/users/' + u.id, 'PATCH', { name, role });
+      await users(true);
+    }],
+    ['Delete', async () => {
+      if (!confirm('Delete ' + u.email + ' and all their notes and posts?')) return;
+      await api('/users/' + u.id, 'DELETE');
+      await users(true);
+    }],
+  ]));
+
+$('addUser').onclick = () => run(async () => {
+  await api('/users', 'POST', {
+    name: $('uName').value, email: $('uEmail').value,
+    password: $('uPassword').value, role: $('uRole').value,
+  });
+  ['uName', 'uEmail', 'uPassword'].forEach((id) => ($(id).value = ''));
+  await users(true);
+});
+
+// ---- admin: all notes
+const allNotes = pager($('allNotes'), $('allNotesMore'), () => '/notes/all', (box, n) =>
+  row(box, `${n.title}: ${n.content} (owner id: ${n.owner})`));
+
+// ---- admin: interests aggregation
+const groups = pager($('groups'), $('groupsMore'),
+  () => {
+    const v = $('interestFilter').value.trim();
+    return '/users/by-interests' + (v ? '?interest=' + encodeURIComponent(v) : '');
+  },
+  (box, g) => row(box, `${g.interest} (${g.count}): ${g.users.map((u) => u.name).join(', ')}`));
+$('interestBtn').onclick = () => run(() => groups(true));
+
+// ---- auth + startup
+async function authenticate(path, body) {
+  const data = await api(path, 'POST', body);
+  token = data.token;
+  localStorage.setItem('token', token);
+  await start();
+}
+
+$('loginBtn').onclick = () => run(() =>
+  authenticate('/auth/login', { email: $('email').value, password: $('password').value }));
+
+$('registerBtn').onclick = () => run(() =>
+  authenticate('/auth/register', {
+    name: $('name').value, email: $('email').value, password: $('password').value,
+    interests: $('interests').value.split(',').map((s) => s.trim()).filter(Boolean),
+  }));
+
+$('logoutBtn').onclick = () => { localStorage.removeItem('token'); location.reload(); };
+
+async function start() {
+  me = (await api('/auth/me')).user;
+  $('auth').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  $('who').textContent = `${me.email} (${me.role})`;
+  $('admin').classList.toggle('hidden', me.role !== 'admin');
+  await Promise.all([notes(true), posts(true)]);
+  if (me.role === 'admin') await Promise.all([users(true), allNotes(true), groups(true)]);
+}
+
+if (token) run(start);
+</script>
+</body>
+</html>

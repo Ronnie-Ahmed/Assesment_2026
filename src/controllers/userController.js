@@ -109,3 +109,45 @@ export async function deleteUser(req, res) {
     handleError(err, res);
   }
 }
+
+// Scenario 1: users grouped by interest, using exactly one aggregate() call.
+export async function groupByInterests(req, res) {
+  try {
+    let limit = parseInt(req.query.limit, 10);
+    if (!Number.isInteger(limit) || limit < 1) limit = 10;
+    limit = Math.min(limit, 50);
+
+    const interest = req.query.interest ? String(req.query.interest).trim().toLowerCase() : null;
+    const cursor = req.query.cursor ? String(req.query.cursor) : null;
+
+    const pipeline = [];
+    if (interest) pipeline.push({ $match: { interests: interest } }); // uses the multikey index
+    pipeline.push({ $unwind: '$interests' });
+    if (interest) pipeline.push({ $match: { interests: interest } }); // keep only that group
+    pipeline.push({
+      $group: {
+        _id: '$interests',
+        count: { $sum: 1 },
+        users: { $firstN: { input: { id: '$_id', name: '$name' }, n: 20 } },
+      },
+    });
+    if (cursor) pipeline.push({ $match: { _id: { $gt: cursor } } });
+    pipeline.push(
+      { $sort: { _id: 1 } },
+      { $limit: limit + 1 },
+      { $project: { _id: 0, interest: '$_id', count: 1, users: 1 } }
+    );
+
+    const docs = await User.aggregate(pipeline);
+
+    const hasMore = docs.length > limit;
+    const data = hasMore ? docs.slice(0, limit) : docs;
+    res.json({
+      data,
+      nextCursor: hasMore ? data[data.length - 1].interest : null,
+      limit,
+    });
+  } catch (err) {
+    handleError(err, res);
+  }
+}
