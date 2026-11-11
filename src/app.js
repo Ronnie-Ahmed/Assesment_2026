@@ -38,6 +38,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/posts', postRoutes);
+app.get('/', (req, res) => {
+  res.json({ name: 'Secure Notes API', health: '/health' });
+});
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
