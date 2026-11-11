@@ -16,6 +16,9 @@ const userSchema = new mongoose.Schema(
 );
 
 // Supports login and every lookup by email, and enforces uniqueness.
+userSchema.index({ email: 1 }, { unique: true });
+
+// Serves the interests aggregation when it is filtered to one interest.
 userSchema.index({ interests: 1 });
 
 export default mongoose.model('User', userSchema);
