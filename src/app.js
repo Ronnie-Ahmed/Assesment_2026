@@ -1,7 +1,6 @@
 import path from 'node:path';
 import cors from 'cors';
-import { fileURLToPath } from 'node:url';
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 
 import express from 'express';
 import { connectDB } from './config/db.js';
@@ -39,7 +38,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/posts', postRoutes);
-app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
