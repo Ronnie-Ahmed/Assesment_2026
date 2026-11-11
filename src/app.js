@@ -1,4 +1,5 @@
 import path from 'node:path';
+import cors from 'cors';
 import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,6 +12,18 @@ import postRoutes from './routes/postRoutes.js';
 
 
 const app = express();
+
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: allowedOrigins.length ? allowedOrigins : false,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 
 app.use(express.json());
 app.use('/api', async (req, res, next) => {

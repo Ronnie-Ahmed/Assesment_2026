@@ -82,12 +82,13 @@
 </div>
 
 <script>
+const API_BASE = 'https://YOUR-BACKEND.vercel.app';
 const $ = (id) => document.getElementById(id);
 let token = localStorage.getItem('token');
 let me = null;
 
 async function api(path, method = 'GET', body) {
-  const res = await fetch('/api' + path, {
+  const res = await fetch(API_BASE + '/api' + path, {
     method,
     headers: {
       'Content-Type': 'application/json',
